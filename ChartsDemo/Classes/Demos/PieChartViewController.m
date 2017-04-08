@@ -2,13 +2,11 @@
 //  PieChartViewController.m
 //  ChartsDemo
 //
-//  Created by Daniel Cohen Gindi on 17/3/15.
-//
 //  Copyright 2015 Daniel Cohen Gindi & Philipp Jahoda
 //  A port of MPAndroidChart for iOS
 //  Licensed under Apache License 2.0
 //
-//  https://github.com/danielgindi/ios-charts
+//  https://github.com/danielgindi/Charts
 //
 
 #import "PieChartViewController.h"
@@ -37,39 +35,38 @@
                      @{@"key": @"toggleXValues", @"label": @"Toggle X-Values"},
                      @{@"key": @"togglePercent", @"label": @"Toggle Percent"},
                      @{@"key": @"toggleHole", @"label": @"Toggle Hole"},
+                     @{@"key": @"toggleIcons", @"label": @"Toggle Icons"},
                      @{@"key": @"animateX", @"label": @"Animate X"},
                      @{@"key": @"animateY", @"label": @"Animate Y"},
                      @{@"key": @"animateXY", @"label": @"Animate XY"},
                      @{@"key": @"spin", @"label": @"Spin"},
                      @{@"key": @"drawCenter", @"label": @"Draw CenterText"},
-                     @{@"key": @"saveToGallery", @"label": @"Save to Camera Roll"}
+                     @{@"key": @"saveToGallery", @"label": @"Save to Camera Roll"},
+                     @{@"key": @"toggleData", @"label": @"Toggle Data"},
                      ];
+    
+    [self setupPieChartView:_chartView];
     
     _chartView.delegate = self;
     
-    _chartView.usePercentValuesEnabled = YES;
-    _chartView.holeTransparent = YES;
-    _chartView.centerTextFont = [UIFont fontWithName:@"HelveticaNeue-Light" size:12.f];
-    _chartView.holeRadiusPercent = 0.58;
-    _chartView.transparentCircleRadiusPercent = 0.61;
-    _chartView.descriptionText = @"";
-    _chartView.drawCenterTextEnabled = YES;
-    _chartView.drawHoleEnabled = YES;
-    _chartView.rotationAngle = 0.0;
-    _chartView.rotationEnabled = YES;
-    _chartView.centerText = @"iOS Charts\nby Daniel Cohen Gindi";
-    
     ChartLegend *l = _chartView.legend;
-    l.position = ChartLegendPositionRightOfChart;
+    l.horizontalAlignment = ChartLegendHorizontalAlignmentRight;
+    l.verticalAlignment = ChartLegendVerticalAlignmentTop;
+    l.orientation = ChartLegendOrientationVertical;
+    l.drawInside = NO;
     l.xEntrySpace = 7.0;
     l.yEntrySpace = 0.0;
     l.yOffset = 0.0;
     
-    _sliderX.value = 3.0;
+    // entry label styling
+    _chartView.entryLabelColor = UIColor.whiteColor;
+    _chartView.entryLabelFont = [UIFont fontWithName:@"HelveticaNeue-Light" size:12.f];
+    
+    _sliderX.value = 4.0;
     _sliderY.value = 100.0;
     [self slidersValueChanged:nil];
     
-    [_chartView animateWithXAxisDuration:1.5 yAxisDuration:1.5 easingOption:ChartEasingOptionEaseOutBack];
+    [_chartView animateWithXAxisDuration:1.4 easingOption:ChartEasingOptionEaseOutBack];
 }
 
 - (void)didReceiveMemoryWarning
@@ -78,27 +75,34 @@
     // Dispose of any resources that can be recreated.
 }
 
+- (void)updateChartData
+{
+    if (self.shouldHideData)
+    {
+        _chartView.data = nil;
+        return;
+    }
+    
+    [self setDataCount:_sliderX.value range:_sliderY.value];
+}
+
 - (void)setDataCount:(int)count range:(double)range
 {
     double mult = range;
     
-    NSMutableArray *yVals1 = [[NSMutableArray alloc] init];
-    
-    // IMPORTANT: In a PieChart, no values (Entry) should have the same xIndex (even if from different DataSets), since no values can be drawn above each other.
-    for (int i = 0; i < count; i++)
-    {
-        [yVals1 addObject:[[BarChartDataEntry alloc] initWithValue:(arc4random_uniform(mult) + mult / 5) xIndex:i]];
-    }
-    
-    NSMutableArray *xVals = [[NSMutableArray alloc] init];
+    NSMutableArray *values = [[NSMutableArray alloc] init];
     
     for (int i = 0; i < count; i++)
     {
-        [xVals addObject:parties[i % parties.count]];
+        [values addObject:[[PieChartDataEntry alloc] initWithValue:(arc4random_uniform(mult) + mult / 5) label:parties[i % parties.count] icon: [UIImage imageNamed:@"icon"]]];
     }
     
-    PieChartDataSet *dataSet = [[PieChartDataSet alloc] initWithYVals:yVals1 label:@"Election Results"];
-    dataSet.sliceSpace = 3.0;
+    PieChartDataSet *dataSet = [[PieChartDataSet alloc] initWithValues:values label:@"Election Results"];
+    
+    dataSet.drawIconsEnabled = NO;
+    
+    dataSet.sliceSpace = 2.0;
+    dataSet.iconsOffset = CGPointMake(0, 40);
     
     // add a lot of colors
     
@@ -112,14 +116,14 @@
     
     dataSet.colors = colors;
     
-    PieChartData *data = [[PieChartData alloc] initWithXVals:xVals dataSet:dataSet];
+    PieChartData *data = [[PieChartData alloc] initWithDataSet:dataSet];
     
     NSNumberFormatter *pFormatter = [[NSNumberFormatter alloc] init];
     pFormatter.numberStyle = NSNumberFormatterPercentStyle;
     pFormatter.maximumFractionDigits = 1;
     pFormatter.multiplier = @1.f;
     pFormatter.percentSymbol = @" %";
-    [data setValueFormatter:pFormatter];
+    [data setValueFormatter:[[ChartDefaultValueFormatter alloc] initWithFormatter:pFormatter]];
     [data setValueFont:[UIFont fontWithName:@"HelveticaNeue-Light" size:11.f]];
     [data setValueTextColor:UIColor.whiteColor];
     
@@ -129,21 +133,12 @@
 
 - (void)optionTapped:(NSString *)key
 {
-    if ([key isEqualToString:@"toggleValues"])
-    {
-        for (ChartDataSet *set in _chartView.data.dataSets)
-        {
-            set.drawValuesEnabled = !set.isDrawValuesEnabled;
-        }
-        
-        [_chartView setNeedsDisplay];
-    }
-    
     if ([key isEqualToString:@"toggleXValues"])
     {
         _chartView.drawSliceTextEnabled = !_chartView.isDrawSliceTextEnabled;
         
         [_chartView setNeedsDisplay];
+        return;
     }
     
     if ([key isEqualToString:@"togglePercent"])
@@ -151,6 +146,7 @@
         _chartView.usePercentValuesEnabled = !_chartView.isUsePercentValuesEnabled;
         
         [_chartView setNeedsDisplay];
+        return;
     }
     
     if ([key isEqualToString:@"toggleHole"])
@@ -158,6 +154,7 @@
         _chartView.drawHoleEnabled = !_chartView.isDrawHoleEnabled;
         
         [_chartView setNeedsDisplay];
+        return;
     }
     
     if ([key isEqualToString:@"drawCenter"])
@@ -165,47 +162,49 @@
         _chartView.drawCenterTextEnabled = !_chartView.isDrawCenterTextEnabled;
         
         [_chartView setNeedsDisplay];
+        return;
     }
     
     if ([key isEqualToString:@"animateX"])
     {
-        [_chartView animateWithXAxisDuration:3.0];
+        [_chartView animateWithXAxisDuration:1.4];
+        return;
     }
     
     if ([key isEqualToString:@"animateY"])
     {
-        [_chartView animateWithYAxisDuration:3.0];
+        [_chartView animateWithYAxisDuration:1.4];
+        return;
     }
     
     if ([key isEqualToString:@"animateXY"])
     {
-        [_chartView animateWithXAxisDuration:3.0 yAxisDuration:3.0];
+        [_chartView animateWithXAxisDuration:1.4 yAxisDuration:1.4];
+        return;
     }
     
     if ([key isEqualToString:@"spin"])
     {
-        [_chartView spinWithDuration:2.0 fromAngle:_chartView.rotationAngle toAngle:_chartView.rotationAngle + 360.f];
+        [_chartView spinWithDuration:2.0 fromAngle:_chartView.rotationAngle toAngle:_chartView.rotationAngle + 360.f easingOption:ChartEasingOptionEaseInCubic];
+        return;
     }
     
-    if ([key isEqualToString:@"saveToGallery"])
-    {
-        [_chartView saveToCameraRoll];
-    }
+    [super handleOption:key forChartView:_chartView];
 }
 
 #pragma mark - Actions
 
 - (IBAction)slidersValueChanged:(id)sender
 {
-    _sliderTextX.text = [@((int)_sliderX.value + 1) stringValue];
+    _sliderTextX.text = [@((int)_sliderX.value) stringValue];
     _sliderTextY.text = [@((int)_sliderY.value) stringValue];
     
-    [self setDataCount:(_sliderX.value + 1) range:_sliderY.value];
+    [self updateChartData];
 }
 
 #pragma mark - ChartViewDelegate
 
-- (void)chartValueSelected:(ChartViewBase * __nonnull)chartView entry:(ChartDataEntry * __nonnull)entry dataSetIndex:(NSInteger)dataSetIndex highlight:(ChartHighlight * __nonnull)highlight
+- (void)chartValueSelected:(ChartViewBase * __nonnull)chartView entry:(ChartDataEntry * __nonnull)entry highlight:(ChartHighlight * __nonnull)highlight
 {
     NSLog(@"chartValueSelected");
 }
